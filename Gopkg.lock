@@ -28,6 +28,12 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/karrick/godirwalk"
+  packages = ["."]
+  revision = "2209ce92518a6de2b4d645eb17c3e74fdbd02c4c"
+
+[[projects]]
+  branch = "master"
   name = "github.com/nightlyone/lockfile"
   packages = ["."]
   revision = "e83dc5e7bba095e8d32fb2124714bf41f2a30cb5"
@@ -59,6 +65,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "7c692c08851064cf6167056c23082edcf393d3af6bc0768c3111e0dde7444960"
+  inputs-digest = "de50a7bf2ad34db851ef57bdb0427c7f4d3e9480884653f4d94e31f5da66d8d5"
   solver-name = "gps-cdcl"
   solver-version = 1
