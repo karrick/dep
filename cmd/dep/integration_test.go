@@ -15,6 +15,7 @@ import (
 
 	"github.com/golang/dep"
 	"github.com/golang/dep/internal/test"
+	"github.com/karrick/godirwalk"
 )
 
 func TestIntegration(t *testing.T) {
@@ -33,12 +34,8 @@ func TestIntegration(t *testing.T) {
 		"init_path_tests",
 	} {
 		relPath := filepath.Join("testdata", dirName)
-		filepath.Walk(relPath, func(path string, info os.FileInfo, err error) error {
-			if err != nil {
-				t.Fatal("error walking filepath")
-			}
-
-			if filepath.Base(path) != "testcase.json" {
+		_ = godirwalk.Walk(relPath, &godirwalk.Options{Callback: func(path string, de *godirwalk.Dirent) error {
+			if de.Name() != "testcase.json" {
 				return nil
 			}
 
@@ -52,7 +49,7 @@ func TestIntegration(t *testing.T) {
 			})
 
 			return nil
-		})
+		}})
 	}
 }
 

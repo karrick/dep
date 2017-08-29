@@ -18,6 +18,7 @@ import (
 	"github.com/golang/dep/internal/fs"
 	"github.com/golang/dep/internal/gps"
 	"github.com/golang/dep/internal/gps/pkgtree"
+	"github.com/karrick/godirwalk"
 	"github.com/pkg/errors"
 )
 
@@ -164,18 +165,19 @@ func calculatePrune(vendorDir string, keep []string, logger *log.Logger) ([]stri
 	logger.Println("Calculating prune. Checking the following packages:")
 	sort.Strings(keep)
 	toDelete := []string{}
-	err := filepath.Walk(vendorDir, func(path string, info os.FileInfo, err error) error {
+	err := godirwalk.Walk(vendorDir, &godirwalk.Options{Callback: func(path string, de *godirwalk.Dirent) error {
+		// ??? why does this Lstat everything
 		if _, err := os.Lstat(path); err != nil {
 			return nil
 		}
-		if !info.IsDir() {
+		if !de.IsDir() {
 			return nil
 		}
 		if path == vendorDir {
 			return nil
 		}
 
-		name := strings.TrimPrefix(path, vendorDir+string(filepath.Separator))
+		name := de.Name()
 		logger.Printf("  %s", name)
 		i := sort.Search(len(keep), func(i int) bool {
 			return name <= keep[i]
@@ -184,7 +186,7 @@ func calculatePrune(vendorDir string, keep []string, logger *log.Logger) ([]stri
 			toDelete = append(toDelete, path)
 		}
 		return nil
-	})
+	}})
 	return toDelete, err
 }
 

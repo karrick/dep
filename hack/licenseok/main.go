@@ -16,6 +16,8 @@ import (
 	"path/filepath"
 	"sync"
 	"time"
+
+	"github.com/karrick/godirwalk"
 )
 
 const helpText = `Usage: licenseok [flags] pattern [pattern ...]
@@ -101,17 +103,19 @@ func main() {
 }
 
 func walk(ch chan<- *file, start string) {
-	filepath.Walk(start, func(path string, fi os.FileInfo, err error) error {
+	_ = godirwalk.Walk(start, &godirwalk.Options{Callback: func(path string, de *godirwalk.Dirent) error {
+		if de.IsDir() {
+			return nil
+		}
+		// Because godirwalk.Dirent only contains type information, and we want
+		// permission bits, we'll have to stat the file node.
+		info, err := os.Stat(path)
 		if err != nil {
-			log.Printf("%s error: %v", path, err)
-			return nil
+			return err
 		}
-		if fi.IsDir() {
-			return nil
-		}
-		ch <- &file{path, fi.Mode()}
+		ch <- &file{path, info.Mode()}
 		return nil
-	})
+	}})
 }
 
 func addLicense(b []byte, path string, fmode os.FileMode) error {

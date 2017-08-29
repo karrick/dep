@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/karrick/godirwalk"
 )
 
 // This file contains utilities for running tests around file system state.
@@ -53,46 +55,42 @@ func (fs filesystemState) assert(t *testing.T) {
 		linkMap[l.path.prepend(fs.root).String()] = true
 	}
 
-	err := filepath.Walk(fs.root, func(path string, info os.FileInfo, err error) error {
-		if err != nil {
-			t.Errorf("filepath.Walk path=%q  err=%q", path, err)
-			return err
-		}
+	err := godirwalk.Walk(fs.root, &godirwalk.Options{
+		Callback: func(path string, de *godirwalk.Dirent) error {
+			if path == fs.root {
+				return nil
+			}
 
-		if path == fs.root {
-			return nil
-		}
+			// Careful! Have to check whether the path is a symlink first because, on
+			// windows, a symlink to a directory will return 'true' for info.IsDir().
+			if de.IsSymlink() {
+				if linkMap[path] {
+					delete(linkMap, path)
+				} else {
+					t.Errorf("unexpected symlink exists %q", path)
+				}
+				return nil
+			}
 
-		// Careful! Have to check whether the path is a symlink first because, on
-		// windows, a symlink to a directory will return 'true' for info.IsDir().
-		if (info.Mode() & os.ModeSymlink) != 0 {
-			if linkMap[path] {
-				delete(linkMap, path)
+			if de.IsDir() {
+				if dirMap[path] {
+					delete(dirMap, path)
+				} else {
+					t.Errorf("unexpected directory exists %q", path)
+				}
+				return nil
+			}
+
+			if fileMap[path] {
+				delete(fileMap, path)
 			} else {
-				t.Errorf("unexpected symlink exists %q", path)
+				t.Errorf("unexpected file exists %q", path)
 			}
 			return nil
-		}
-
-		if info.IsDir() {
-			if dirMap[path] {
-				delete(dirMap, path)
-			} else {
-				t.Errorf("unexpected directory exists %q", path)
-			}
-			return nil
-		}
-
-		if fileMap[path] {
-			delete(fileMap, path)
-		} else {
-			t.Errorf("unexpected file exists %q", path)
-		}
-		return nil
-	})
+		}})
 
 	if err != nil {
-		t.Errorf("filesystem.Walk err=%q", err)
+		t.Errorf("godirwalk.Walk err=%q", err)
 	}
 
 	for d := range dirMap {

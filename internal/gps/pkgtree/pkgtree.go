@@ -16,6 +16,8 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
+	"github.com/karrick/godirwalk"
 )
 
 // Package represents a Go package. It contains a subset of the information
@@ -71,119 +73,119 @@ func ListPackages(fileRoot, importRoot string) (PackageTree, error) {
 		return PackageTree{}, err
 	}
 
-	err = filepath.Walk(fileRoot, func(wp string, fi os.FileInfo, err error) error {
-		if err != nil && err != filepath.SkipDir {
-			return err
-		}
-		if !fi.IsDir() {
-			return nil
-		}
+	err = godirwalk.Walk(fileRoot, &godirwalk.Options{
+		Callback: func(wp string, de *godirwalk.Dirent) error {
+			if !de.IsDir() {
+				return nil
+			}
 
-		// Skip dirs that are known to hold non-local/dependency code.
-		//
-		// We don't skip _*, or testdata dirs because, while it may be poor
-		// form, importing them is not a compilation error.
-		switch fi.Name() {
-		case "vendor", "Godeps":
-			return filepath.SkipDir
-		}
+			name := de.Name()
 
-		// Skip dirs that are known to be VCS roots.
-		//
-		// Note that there are some pathological edge cases this doesn't cover,
-		// such as a user using Git for version control, but having a package
-		// named "svn" in a directory named ".svn".
-		if _, ok := vcsRoots[fi.Name()]; ok {
-			return filepath.SkipDir
-		}
-
-		// The entry error is nil when visiting a directory that itself is
-		// untraversable, as it's still governed by the parent directory's
-		// perms. We have to check readability of the dir here, because
-		// otherwise we'll have an empty package entry when we fail to read any
-		// of the dir's contents.
-		//
-		// If we didn't check here, then the next time this closure is called it
-		// would have an err with the same path as is called this time, as only
-		// then will filepath.Walk have attempted to descend into the directory
-		// and encountered an error.
-		var f *os.File
-		f, err = os.Open(wp)
-		if err != nil {
-			if os.IsPermission(err) {
+			// Skip dirs that are known to hold non-local/dependency code.
+			//
+			// We don't skip _*, or testdata dirs because, while it may be poor
+			// form, importing them is not a compilation error.
+			switch name {
+			case "vendor", "Godeps":
 				return filepath.SkipDir
 			}
-			return err
-		}
-		f.Close()
 
-		// Compute the import path. Run the result through ToSlash(), so that
-		// windows file paths are normalized to slashes, as is expected of
-		// import paths.
-		ip := filepath.ToSlash(filepath.Join(importRoot, strings.TrimPrefix(wp, fileRoot)))
-
-		// Find all the imports, across all os/arch combos
-		//p, err := fullPackageInDir(wp)
-		p := &build.Package{
-			Dir: wp,
-		}
-		err = fillPackage(p)
-
-		var pkg Package
-		if err == nil {
-			pkg = Package{
-				ImportPath:  ip,
-				CommentPath: p.ImportComment,
-				Name:        p.Name,
-				Imports:     p.Imports,
-				TestImports: dedupeStrings(p.TestImports, p.XTestImports),
+			// Skip dirs that are known to be VCS roots.
+			//
+			// Note that there are some pathological edge cases this doesn't cover,
+			// such as a user using Git for version control, but having a package
+			// named "svn" in a directory named ".svn".
+			if _, ok := vcsRoots[name]; ok {
+				return filepath.SkipDir
 			}
-		} else {
-			switch err.(type) {
-			case gscan.ErrorList, *gscan.Error, *build.NoGoError:
-				// This happens if we encounter malformed or nonexistent Go
-				// source code
-				ptree.Packages[ip] = PackageOrErr{
-					Err: err,
+
+			// The entry error is nil when visiting a directory that itself is
+			// untraversable, as it's still governed by the parent directory's
+			// perms. We have to check readability of the dir here, because
+			// otherwise we'll have an empty package entry when we fail to read any
+			// of the dir's contents.
+			//
+			// If we didn't check here, then the next time this closure is called it
+			// would have an err with the same path as is called this time, as only
+			// then will filepath.Walk have attempted to descend into the directory
+			// and encountered an error.
+			var f *os.File
+			f, err = os.Open(wp)
+			if err != nil {
+				if os.IsPermission(err) {
+					return filepath.SkipDir
 				}
-				return nil
-			default:
 				return err
 			}
-		}
+			f.Close()
 
-		// This area has some...fuzzy rules, but check all the imports for
-		// local/relative/dot-ness, and record an error for the package if we
-		// see any.
-		var lim []string
-		for _, imp := range append(pkg.Imports, pkg.TestImports...) {
-			switch {
-			// Do allow the single-dot, at least for now
-			case imp == "..":
-				lim = append(lim, imp)
-			case strings.HasPrefix(imp, "./"):
-				lim = append(lim, imp)
-			case strings.HasPrefix(imp, "../"):
-				lim = append(lim, imp)
-			}
-		}
+			// Compute the import path. Run the result through ToSlash(), so that
+			// windows file paths are normalized to slashes, as is expected of
+			// import paths.
+			ip := filepath.ToSlash(filepath.Join(importRoot, strings.TrimPrefix(wp, fileRoot)))
 
-		if len(lim) > 0 {
-			ptree.Packages[ip] = PackageOrErr{
-				Err: &LocalImportsError{
-					Dir:          wp,
-					ImportPath:   ip,
-					LocalImports: lim,
-				},
+			// Find all the imports, across all os/arch combos
+			//p, err := fullPackageInDir(wp)
+			p := &build.Package{
+				Dir: wp,
 			}
-		} else {
-			ptree.Packages[ip] = PackageOrErr{
-				P: pkg,
-			}
-		}
+			err = fillPackage(p)
 
-		return nil
-	})
+			var pkg Package
+			if err == nil {
+				pkg = Package{
+					ImportPath:  ip,
+					CommentPath: p.ImportComment,
+					Name:        p.Name,
+					Imports:     p.Imports,
+					TestImports: dedupeStrings(p.TestImports, p.XTestImports),
+				}
+			} else {
+				switch err.(type) {
+				case gscan.ErrorList, *gscan.Error, *build.NoGoError:
+					// This happens if we encounter malformed or nonexistent Go
+					// source code
+					ptree.Packages[ip] = PackageOrErr{
+						Err: err,
+					}
+					return nil
+				default:
+					return err
+				}
+			}
+
+			// This area has some...fuzzy rules, but check all the imports for
+			// local/relative/dot-ness, and record an error for the package if we
+			// see any.
+			var lim []string
+			for _, imp := range append(pkg.Imports, pkg.TestImports...) {
+				switch {
+				// Do allow the single-dot, at least for now
+				case imp == "..":
+					lim = append(lim, imp)
+				case strings.HasPrefix(imp, "./"):
+					lim = append(lim, imp)
+				case strings.HasPrefix(imp, "../"):
+					lim = append(lim, imp)
+				}
+			}
+
+			if len(lim) > 0 {
+				ptree.Packages[ip] = PackageOrErr{
+					Err: &LocalImportsError{
+						Dir:          wp,
+						ImportPath:   ip,
+						LocalImports: lim,
+					},
+				}
+			} else {
+				ptree.Packages[ip] = PackageOrErr{
+					P: pkg,
+				}
+			}
+
+			return nil
+		}})
 
 	if err != nil {
 		return PackageTree{}, err

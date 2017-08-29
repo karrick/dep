@@ -16,6 +16,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/karrick/godirwalk"
 	"github.com/pkg/errors"
 )
 
@@ -175,19 +176,21 @@ func (p *IntegrationTestProject) DoRun(args []string) error {
 }
 
 func (p *IntegrationTestProject) CopyTree(src string) {
-	filepath.Walk(src,
-		func(path string, info os.FileInfo, err error) error {
-			if path != src {
-				localpath := path[len(src)+1:]
-				if info.IsDir() {
-					p.TempDir(ProjectRoot, localpath)
-				} else {
-					destpath := filepath.Join(p.ProjPath(), localpath)
-					copyFile(destpath, path)
+	godirwalk.Walk(
+		src,
+		&godirwalk.Options{
+			Callback: func(path string, de *godirwalk.Dirent) error {
+				if path != src {
+					localpath := path[len(src)+1:]
+					if de.IsDir() {
+						p.TempDir(ProjectRoot, localpath)
+					} else {
+						destpath := filepath.Join(p.ProjPath(), localpath)
+						copyFile(destpath, path)
+					}
 				}
-			}
-			return nil
-		})
+				return nil
+			}})
 }
 
 func copyFile(dest, src string) {
@@ -210,19 +213,19 @@ func copyFile(dest, src string) {
 func (p *IntegrationTestProject) GetVendorPaths() []string {
 	vendorPath := p.ProjPath("vendor")
 	result := make([]string, 0)
-	filepath.Walk(
+	godirwalk.Walk(
 		vendorPath,
-		func(path string, info os.FileInfo, err error) error {
-			if len(path) > len(vendorPath) && info.IsDir() {
-				parse := strings.Split(path[len(vendorPath)+1:], string(filepath.Separator))
-				if len(parse) == 3 {
-					result = append(result, strings.Join(parse, "/"))
-					return filepath.SkipDir
+		&godirwalk.Options{
+			Callback: func(path string, de *godirwalk.Dirent) error {
+				if de.IsDir() && len(path) > len(vendorPath) {
+					parse := strings.Split(path[len(vendorPath)+1:], string(filepath.Separator))
+					if len(parse) == 3 {
+						result = append(result, strings.Join(parse, "/"))
+						return filepath.SkipDir
+					}
 				}
-			}
-			return nil
-		},
-	)
+				return nil
+			}})
 	sort.Strings(result)
 	return result
 }
@@ -231,19 +234,19 @@ func (p *IntegrationTestProject) GetVendorPaths() []string {
 func (p *IntegrationTestProject) GetImportPaths() []string {
 	importPath := p.Path("src")
 	result := make([]string, 0)
-	filepath.Walk(
+	godirwalk.Walk(
 		importPath,
-		func(path string, info os.FileInfo, err error) error {
-			if len(path) > len(importPath) && info.IsDir() {
-				parse := strings.Split(path[len(importPath)+1:], string(filepath.Separator))
-				if len(parse) == 3 {
-					result = append(result, strings.Join(parse, "/"))
-					return filepath.SkipDir
+		&godirwalk.Options{
+			Callback: func(path string, de *godirwalk.Dirent) error {
+				if de.IsDir() && len(path) > len(importPath) {
+					parse := strings.Split(path[len(importPath)+1:], string(filepath.Separator))
+					if len(parse) == 3 {
+						result = append(result, strings.Join(parse, "/"))
+						return filepath.SkipDir
+					}
 				}
-			}
-			return nil
-		},
-	)
+				return nil
+			}})
 	sort.Strings(result)
 	return result
 }

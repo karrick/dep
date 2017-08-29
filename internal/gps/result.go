@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/karrick/godirwalk"
 	"github.com/pkg/errors"
 )
 
@@ -81,7 +82,7 @@ func WriteDepTree(basedir string, l Lock, sm SourceManager, sv bool, logger *log
 			}
 
 			if sv {
-				err := filepath.Walk(to, stripVendor)
+				err := godirwalk.Walk(to, &godirwalk.Options{Callback: stripVendor})
 				if err != nil {
 					errCh <- errors.Wrapf(err, "failed to strip vendor from %s", p.Ident().ProjectRoot)
 				}

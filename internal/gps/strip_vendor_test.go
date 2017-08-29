@@ -7,8 +7,9 @@ package gps
 import (
 	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
+
+	"github.com/karrick/godirwalk"
 )
 
 func stripVendorTestCase(tc fsTestCase) func(*testing.T) {
@@ -27,8 +28,8 @@ func stripVendorTestCase(tc fsTestCase) func(*testing.T) {
 
 		tc.before.setup(t)
 
-		if err := filepath.Walk(tempDir, stripVendor); err != nil {
-			t.Errorf("filepath.Walk err=%q", err)
+		if err := godirwalk.Walk(tempDir, &godirwalk.Options{Callback: stripVendor}); err != nil {
+			t.Errorf("godirwalk.Walk err=%q", err)
 		}
 
 		tc.after.assert(t)

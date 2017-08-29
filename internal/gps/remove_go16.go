@@ -8,8 +8,9 @@ package gps
 
 import (
 	"os"
-	"path/filepath"
 	"runtime"
+
+	"github.com/karrick/godirwalk"
 )
 
 // removeAll removes path and any children it contains. It deals correctly with
@@ -28,18 +29,18 @@ func removeAll(path string) error {
 	}
 
 	// make sure all files are writable so we can delete them
-	err = filepath.Walk(path, func(path string, info os.FileInfo, err error) error {
-		if err != nil && err != filepath.SkipDir {
-			// walk gave us some error, give it back.
+	err = godirwalk.Walk(path, &godirwalk.Options{Callback: func(path string, _ *godirwalk.Dirent) error {
+		info, err := os.Stat(path)
+		if err != nil {
 			return err
 		}
 		mode := info.Mode()
-		if mode|0200 == mode {
-			return nil
+		mode0200 := mode | 0200
+		if mode0200 == mode {
+			return nil // node is already writable
 		}
-
-		return os.Chmod(path, mode|0200)
-	})
+		return os.Chmod(path, mode0200)
+	}})
 	if err != nil {
 		return err
 	}

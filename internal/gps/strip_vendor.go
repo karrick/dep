@@ -9,36 +9,34 @@ package gps
 import (
 	"os"
 	"path/filepath"
+
+	"github.com/karrick/godirwalk"
 )
 
-func stripVendor(path string, info os.FileInfo, err error) error {
-	if err != nil {
-		return err
-	}
-
-	if info.Name() == "vendor" {
+func stripVendor(path string, de *godirwalk.Dirent) error {
+	if de.Name() == "vendor" {
+		// ??? needless call to Lstat
 		if _, err := os.Lstat(path); err != nil {
 			return err
 		}
 
-		if (info.Mode() & os.ModeSymlink) != 0 {
-			realInfo, err := os.Stat(path)
+		if de.IsSymlink() {
+			referentInfo, err := os.Stat(path)
 			if err != nil {
 				return err
 			}
-			if realInfo.IsDir() {
+			if referentInfo.IsDir() {
 				return os.Remove(path)
 			}
 		}
 
-		if info.IsDir() {
+		if de.IsDir() {
 			if err := removeAll(path); err != nil {
 				return err
 			}
 			return filepath.SkipDir
 		}
 
-		return nil
 	}
 
 	return nil
